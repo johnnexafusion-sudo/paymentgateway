@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 
+const ALLOWED_CURRENCIES = ["USD", "CAD", "GBP", "EUR", "NGN"] as const;
+
+const ALLOWED_BRANDS = [
+  "Inkwell Career Path",
+  "Nexa Career Solutions",
+] as const;
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -10,6 +17,70 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message: "Missing required payment information.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const normalizedName = String(name).trim();
+    const normalizedEmail = String(email).trim();
+    const normalizedCurrency = String(currency).trim().toUpperCase();
+    const normalizedBrand = String(brand).trim();
+    const numericAmount = Number(amount);
+
+    if (!normalizedName || !normalizedEmail) {
+      return NextResponse.json(
+        {
+          message: "Name and email are required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+    ) {
+      return NextResponse.json(
+        {
+          message: "Please provide a valid email address.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
+      return NextResponse.json(
+        {
+          message: "Payment amount must be greater than zero.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !ALLOWED_CURRENCIES.includes(
+        normalizedCurrency as (typeof ALLOWED_CURRENCIES)[number]
+      )
+    ) {
+      return NextResponse.json(
+        {
+          message: "Unsupported payment currency.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !ALLOWED_BRANDS.includes(
+        normalizedBrand as (typeof ALLOWED_BRANDS)[number]
+      )
+    ) {
+      return NextResponse.json(
+        {
+          message: "Unsupported payment brand.",
         },
         { status: 400 }
       );
@@ -42,19 +113,19 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({
           tx_ref: txRef,
-          amount: Number(amount),
-          currency,
+          amount: numericAmount,
+          currency: normalizedCurrency,
           redirect_url: `${origin}/payment-callback`,
           customer: {
-            email,
-            name,
+            email: normalizedEmail,
+            name: normalizedName,
           },
           customizations: {
-            title: brand,
-            description: `Secure payment to ${brand}`,
+            title: normalizedBrand,
+            description: `Secure payment to ${normalizedBrand}`,
           },
           meta: {
-            brand,
+            brand: normalizedBrand,
           },
         }),
       }
@@ -67,7 +138,9 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         {
-          message: data.message || "Unable to create Flutterwave payment.",
+          message:
+            data.message ||
+            "Unable to create Flutterwave payment.",
         },
         { status: 400 }
       );
@@ -82,7 +155,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        message: "Something went wrong while creating the payment.",
+        message:
+          "Something went wrong while creating the payment.",
       },
       { status: 500 }
     );
