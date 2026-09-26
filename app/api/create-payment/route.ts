@@ -7,6 +7,17 @@ const ALLOWED_BRANDS = [
   "Nexa Career Solutions",
 ] as const;
 
+const MAX_AMOUNTS: Record<
+  (typeof ALLOWED_CURRENCIES)[number],
+  number
+> = {
+  USD: 100000,
+  CAD: 100000,
+  GBP: 100000,
+  EUR: 100000,
+  NGN: 100000000,
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -37,9 +48,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
-    ) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return NextResponse.json(
         {
           message: "Please provide a valid email address.",
@@ -48,10 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !Number.isFinite(numericAmount) ||
-      numericAmount <= 0
-    ) {
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       return NextResponse.json(
         {
           message: "Payment amount must be greater than zero.",
@@ -81,6 +87,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message: "Unsupported payment brand.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const maxAmount =
+      MAX_AMOUNTS[
+        normalizedCurrency as (typeof ALLOWED_CURRENCIES)[number]
+      ];
+
+    if (numericAmount > maxAmount) {
+      return NextResponse.json(
+        {
+          message: `Payment amount exceeds the maximum allowed for ${normalizedCurrency}.`,
         },
         { status: 400 }
       );
