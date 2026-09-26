@@ -5,6 +5,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
 
     const transactionId = searchParams.get("transaction_id");
+    const expectedTxRef = searchParams.get("tx_ref");
 
     if (!transactionId) {
       return NextResponse.json(
@@ -29,7 +30,9 @@ export async function GET(request: Request) {
     }
 
     const response = await fetch(
-      `https://api.flutterwave.com/v3/transactions/${transactionId}/verify`,
+      `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(
+        transactionId
+      )}/verify`,
       {
         method: "GET",
         headers: {
@@ -42,7 +45,7 @@ export async function GET(request: Request) {
 
     const data = await response.json();
 
-    if (!response.ok || data.status !== "success") {
+    if (!response.ok || data.status !== "success" || !data.data) {
       return NextResponse.json(
         {
           status: "error",
@@ -54,9 +57,18 @@ export async function GET(request: Request) {
 
     const transaction = data.data;
 
+    const referenceMatches =
+      !expectedTxRef || transaction.tx_ref === expectedTxRef;
+
+    const transactionSuccessful =
+      transaction.status === "successful";
+
+    const verificationPassed =
+      transactionSuccessful && referenceMatches;
+
     return NextResponse.json({
       status: "success",
-      verified: transaction.status === "successful",
+      verified: verificationPassed,
 
       transaction: {
         id: transaction.id,
@@ -68,10 +80,13 @@ export async function GET(request: Request) {
         status: transaction.status,
         payment_type: transaction.payment_type,
         created_at: transaction.created_at,
-
         customer: transaction.customer,
-
         meta: transaction.meta || null,
+      },
+
+      checks: {
+        transactionSuccessful,
+        referenceMatches,
       },
     });
   } catch (error) {

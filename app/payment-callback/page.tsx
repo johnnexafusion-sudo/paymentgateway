@@ -25,6 +25,10 @@ type VerificationResult = {
       brand?: string;
     } | null;
   };
+  checks?: {
+    transactionSuccessful?: boolean;
+    referenceMatches?: boolean;
+  };
 };
 
 function PaymentResult() {
@@ -50,7 +54,7 @@ function PaymentResult() {
         const response = await fetch(
           `/api/verify-payment?transaction_id=${encodeURIComponent(
             transactionId
-          )}`,
+          )}&tx_ref=${encodeURIComponent(txRef || "")}`,
           {
             cache: "no-store",
           }
@@ -72,7 +76,7 @@ function PaymentResult() {
     }
 
     verifyPayment();
-  }, [transactionId]);
+  }, [transactionId, txRef]);
 
   function handlePrintReceipt() {
     window.print();
@@ -141,8 +145,6 @@ function PaymentResult() {
       <main className="min-h-screen bg-slate-50 px-6 py-12 text-slate-900 print:bg-white print:px-0 print:py-0">
         <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-2xl items-center justify-center print:min-h-0">
           <section className="receipt-card w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl print:rounded-none print:border-0 print:shadow-none">
-
-            {/* Receipt header */}
             <div
               className={`px-8 py-10 text-center print:border-b print:border-slate-200 print:bg-white ${
                 verified
@@ -184,10 +186,7 @@ function PaymentResult() {
               </p>
             </div>
 
-            {/* Receipt body */}
             <div className="px-8 py-8">
-
-              {/* Brand */}
               <div className="flex items-center justify-between border-b border-slate-200 pb-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -204,7 +203,6 @@ function PaymentResult() {
                 </div>
               </div>
 
-              {/* Amount */}
               {verified && transaction && (
                 <div className="py-8 text-center">
                   <p className="text-sm font-medium text-slate-500">
@@ -230,7 +228,6 @@ function PaymentResult() {
                 </div>
               )}
 
-              {/* Customer information */}
               {verified && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 print:bg-white">
                   <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -263,14 +260,12 @@ function PaymentResult() {
                 </div>
               )}
 
-              {/* Transaction details */}
               <div className="mt-6">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Transaction details
                 </h2>
 
                 <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-200">
-
                   {transaction?.status && (
                     <div className="flex items-center justify-between gap-6 px-5 py-4">
                       <span className="text-sm text-slate-500">
@@ -357,7 +352,6 @@ function PaymentResult() {
                 </div>
               </div>
 
-              {/* Confirmation */}
               {verified && (
                 <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-5 print:bg-white">
                   <div className="flex gap-3">
@@ -379,7 +373,6 @@ function PaymentResult() {
                 </div>
               )}
 
-              {/* Buttons */}
               <div className="mt-8 flex flex-col gap-3 sm:flex-row print:hidden">
                 {verified && (
                   <button
@@ -404,7 +397,6 @@ function PaymentResult() {
                 Flutterwave.
               </p>
 
-              {/* Print-only footer */}
               <div className="mt-10 hidden border-t border-slate-200 pt-5 text-center print:block">
                 <p className="text-xs font-semibold text-slate-500">
                   PaymentGateway
