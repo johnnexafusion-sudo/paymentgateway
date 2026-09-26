@@ -29,13 +29,21 @@ export async function POST(request: Request) {
         ? Object.keys(payload.data)
         : [];
 
-    return NextResponse.json({
-      diagnostic: true,
-      payloadKeys,
-      dataKeys,
-      hasData: Boolean(payload?.data),
-      hasDataId: Boolean(payload?.data?.id),
-      hasDataTxRef: Boolean(payload?.data?.tx_ref),
+    const diagnosticMessage = [
+      `payloadKeys=${payloadKeys.join(",")}`,
+      `dataKeys=${dataKeys.join(",")}`,
+      `hasData=${Boolean(payload?.data)}`,
+      `hasDataId=${Boolean(payload?.data?.id)}`,
+      `hasDataTxRef=${Boolean(payload?.data?.tx_ref)}`,
+    ].join(" | ");
+
+    console.log("WEBHOOK DIAGNOSTIC:", diagnosticMessage);
+
+    return new NextResponse(diagnosticMessage, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain",
+      },
     });
   } catch (error) {
     console.error("Webhook diagnostic error:", error);
