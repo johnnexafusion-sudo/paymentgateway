@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 export async function GET(request: Request) {
   try {
@@ -65,6 +66,63 @@ export async function GET(request: Request) {
 
     const verificationPassed =
       transactionSuccessful && referenceMatches;
+
+    /*
+     * Only update the database after the Flutterwave
+     * transaction has passed server-side verification.
+     */
+    if (verificationPassed) {
+      try {
+        const updateResult = await db.query(
+          `
+            UPDATE public.payment_transactions
+            SET
+              flutterwave_transaction_id = $1,
+              flutterwave_reference = $2,
+              charged_amount = $3,
+              payment_status = $4,
+              payment_method = $5,
+              flutterwave_status = $6,
+              metadata = $7,
+              updated_at = now(),
+              verified_at = now()
+            WHERE transaction_ref = $8
+            RETURNING id
+          `,
+          [
+            String(transaction.id),
+            transaction.flw_ref || null,
+            Number(transaction.charged_amount),
+            "successful",
+            transaction.payment_type || null,
+            transaction.status,
+            JSON.stringify(transaction.meta || null),
+            transaction.tx_ref,
+          ]
+        );
+
+        if (updateResult.rowCount === 0) {
+          console.warn(
+            "Verified Flutterwave transaction has no matching database record:",
+            transaction.tx_ref
+          );
+        }
+      } catch (databaseError) {
+        console.error(
+          "Payment database update failed:",
+          databaseError
+        );
+
+        return NextResponse.json(
+          {
+            status: "error",
+            message:
+              "Payment was verified, but the database record could not be updated.",
+          },
+          { status: 500 }
+        );
+      }
+    }
 
     return NextResponse.json({
       status: "success",

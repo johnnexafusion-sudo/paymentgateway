@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 export async function POST(request: Request) {
   try {
@@ -35,12 +36,15 @@ export async function POST(request: Request) {
     const amount = payload?.amount;
     const currency = payload?.currency;
 
-    if (!transactionId) {
-      console.error("Webhook did not contain a transaction ID.");
+    if (!transactionId || !txRef) {
+      console.error(
+        "Webhook did not contain the required transaction information."
+      );
 
       return NextResponse.json(
         {
-          message: "Webhook did not contain a transaction ID.",
+          message:
+            "Webhook did not contain the required transaction information.",
         },
         { status: 400 }
       );
@@ -59,6 +63,10 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * Never trust the webhook payload by itself.
+     * Retrieve the transaction directly from Flutterwave.
+     */
     const response = await fetch(
       `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(
         transactionId
@@ -89,10 +97,7 @@ export async function POST(request: Request) {
     const transaction = data.data;
 
     const referenceMatches =
-      !txRef || transaction.tx_ref === txRef;
-
-    const statusMatches =
-      transaction.status === "successful";
+      transaction.tx_ref === txRef;
 
     const amountMatches =
       Number(transaction.amount) === Number(amount);
@@ -102,28 +107,19 @@ export async function POST(request: Request) {
       String(currency).toUpperCase();
 
     const verificationPassed =
-      statusMatches &&
       referenceMatches &&
       amountMatches &&
       currencyMatches;
 
-    console.log("WEBHOOK VERIFIED:", {
-      transactionId,
-      txRef,
-      transactionStatus,
-      verifiedStatus: transaction.status,
-      amount,
-      verifiedAmount: transaction.amount,
-      currency,
-      verifiedCurrency: transaction.currency,
-      referenceMatches,
-      statusMatches,
-      amountMatches,
-      currencyMatches,
-      verificationPassed,
-    });
-
     if (!verificationPassed) {
+      console.error("Webhook verification checks failed:", {
+        transactionId,
+        txRef,
+        referenceMatches,
+        amountMatches,
+        currencyMatches,
+      });
+
       return NextResponse.json(
         {
           received: true,
@@ -134,9 +130,76 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * Flutterwave's verified transaction is now trusted.
+     * Update the matching PaymentGateway database record.
+     *
+     * This uses transaction_ref as the idempotent lookup key.
+     * Repeated webhook notifications update the same row
+     * rather than creating duplicate payment records.
+     */
+    const paymentStatus =
+      transaction.status === "successful"
+        ? "successful"
+        : String(transaction.status || "pending");
+
+    const updateResult = await db.query(
+      `
+        UPDATE public.payment_transactions
+        SET
+          flutterwave_transaction_id = $1,
+          flutterwave_reference = $2,
+          charged_amount = $3,
+          payment_status = $4,
+          payment_method = $5,
+          flutterwave_status = $6,
+          metadata = $7,
+          updated_at = now(),
+          verified_at = CASE
+            WHEN $4 = 'successful' THEN now()
+            ELSE verified_at
+          END
+        WHERE transaction_ref = $8
+        RETURNING id, transaction_ref, payment_status
+      `,
+      [
+        String(transaction.id),
+        transaction.flw_ref || null,
+        Number(transaction.charged_amount),
+        paymentStatus,
+        transaction.payment_type || null,
+        transaction.status || null,
+        JSON.stringify(transaction.meta || null),
+        transaction.tx_ref,
+      ]
+    );
+
+    if (updateResult.rowCount === 0) {
+      console.warn(
+        "Verified webhook transaction has no matching database record:",
+        transaction.tx_ref
+      );
+
+      return NextResponse.json({
+        received: true,
+        verified: true,
+        databaseUpdated: false,
+        message:
+          "Webhook verified, but no matching payment record was found.",
+      });
+    }
+
+    console.log("WEBHOOK DATABASE UPDATE:", {
+      transactionId: transaction.id,
+      txRef: transaction.tx_ref,
+      status: paymentStatus,
+      databaseRecordId: updateResult.rows[0].id,
+    });
+
     return NextResponse.json({
       received: true,
       verified: true,
+      databaseUpdated: true,
     });
   } catch (error) {
     console.error("Webhook processing error:", error);

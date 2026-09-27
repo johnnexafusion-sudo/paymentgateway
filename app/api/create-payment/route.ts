@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 const ALLOWED_CURRENCIES = ["USD", "CAD", "GBP", "EUR", "NGN"] as const;
 
@@ -163,6 +164,65 @@ export async function POST(request: Request) {
             "Unable to create Flutterwave payment.",
         },
         { status: 400 }
+      );
+    }
+
+    /*
+     * Save the payment in Supabase after Flutterwave
+     * successfully creates the checkout.
+     */
+    try {
+      await db.query(
+        `
+          INSERT INTO public.payment_transactions (
+            transaction_ref,
+            customer_name,
+            customer_email,
+            brand,
+            amount,
+            currency,
+            payment_status,
+            flutterwave_status,
+            metadata
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9
+          )
+        `,
+        [
+          txRef,
+          normalizedName,
+          normalizedEmail,
+          normalizedBrand,
+          numericAmount,
+          normalizedCurrency,
+          "pending",
+          "pending",
+          JSON.stringify({
+            flutterwave_checkout_created: true,
+          }),
+        ]
+      );
+    } catch (databaseError) {
+      console.error(
+        "Payment database record creation failed:",
+        databaseError
+      );
+
+      return NextResponse.json(
+        {
+          message:
+            "Payment checkout was created, but the payment record could not be saved.",
+        },
+        { status: 500 }
       );
     }
 
