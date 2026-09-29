@@ -11,12 +11,12 @@ export async function GET() {
       currentTime: result.rows[0].current_time,
     });
   } catch (error) {
-    console.error("Vercel database test failed:", error);
+    console.error("VERCEL DATABASE ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: "Vercel database connection failed.",
+        message: error instanceof Error ? error.message : "Unknown database error.",
       },
       { status: 500 }
     );
