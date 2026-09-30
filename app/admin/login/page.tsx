@@ -10,16 +10,13 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setLoading(true);
     setError("");
-    setMessage("");
 
     const supabase = createClient();
 
@@ -29,42 +26,13 @@ export default function AdminLoginPage() {
     });
 
     if (error) {
-      setError("Invalid email or password.");
+      setError(error.message);
       setLoading(false);
       return;
     }
 
     router.push("/admin");
     router.refresh();
-  }
-
-  async function handlePasswordReset() {
-    if (!email) {
-      setError("Enter your email address first.");
-      return;
-    }
-
-    setResetLoading(true);
-    setError("");
-    setMessage("");
-
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback`,
-    });
-
-    if (error) {
-      setError(error.message);
-      setResetLoading(false);
-      return;
-    }
-
-    setMessage(
-      "Password reset instructions have been sent to your email."
-    );
-
-    setResetLoading(false);
   }
 
   return (
@@ -124,26 +92,9 @@ export default function AdminLoginPage() {
               />
             </div>
 
-            <div className="text-right">
-              <button
-                type="button"
-                onClick={handlePasswordReset}
-                disabled={resetLoading}
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                {resetLoading ? "Sending..." : "Forgot password?"}
-              </button>
-            </div>
-
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
-              </div>
-            )}
-
-            {message && (
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                {message}
               </div>
             )}
 
